@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MaxiCard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div id="drawer-overlay" class="overlay hidden" onclick="toggleDrawer(false)"></div>
+
+    <aside id="side-drawer" class="drawer-panel hidden">
+        <div class="drawer-header">
+            <h2>Settings</h2>
+            <button class="btn-icon" onclick="toggleDrawer(false)">✕</button>
+        </div>
+        <div class="drawer-content">
+            <div class="settings-group">
+                <label>Time Travel (Simulate Date)</label>
+                <input type="date" id="simDateInput" class="solid-input">
+                <button class="btn-primary" style="margin-bottom:10px; width:100%;" onclick="updateSimDate()">Apply Date</button>
+                <button class="btn-cancel" style="width:100%;" onclick="resetSimDate()">Reset to Real Today</button>
+            </div>
+            
+            <div class="settings-group">
+                <label>Data Management</label>
+                <button class="btn-primary" style="margin-bottom:10px; width:100%;" onclick="exportBackup()">Export Backup (.json)</button>
+                <button class="btn-cancel" style="width:100%;" onclick="document.getElementById('importFileInput').click()">Import Backup</button>
+                <input type="file" id="importFileInput" style="display:none;" accept=".json" onchange="importBackup(event)">
+            </div>
+        </div>
+    </aside>
+
+    <header class="app-header">
+        <button class="btn-icon" onclick="toggleDrawer(true)">☰</button>
+        <h1 id="app-title">MaxiCard</h1>
+        <button id="theme-toggle" class="btn-icon">🌙</button>
+    </header>
+
+    <div class="status-strip" id="status-strip">Loading portfolio status...</div>
+
+    <main id="app-content">
+        
+        <!-- HOME TAB -->
+        <section id="tab-home" class="tab-section active">
+            <div class="calendar-container glass-panel">
+                <div class="calendar-header">
+                    <button class="btn-icon" onclick="navCalendar(-1)">◀</button>
+                    <h3 id="calendar-month-label">Month</h3>
+                    <button class="btn-icon" onclick="navCalendar(1)">▶</button>
+                    <button class="btn-action" id="cal-expand-btn" onclick="toggleCalendarMode()">Expand</button>
+                </div>
+                <div id="calendar-grid" class="calendar-grid week-mode"></div>
+            </div>
+
+            <div id="date-details-panel" class="solid-panel hidden" style="margin-bottom: 20px; width: 100%; max-width: 100%;"></div>
+            
+            <div class="section-bar">
+                <span class="section-title">Active Cards <small>(Tap card to flip)</small></span>
+                <button class="btn-primary btn-sm" onclick="openTxModal()">+ Log Spend / Pay</button>
+            </div>
+            <div class="carousel" id="card-carousel"></div>
+        </section>
+
+        <!-- VAULT TAB -->
+        <section id="tab-vault" class="tab-section" style="display: none;">
+            <div class="utilization-dashboard glass-panel">
+                <div class="ring-container">
+                    <svg viewBox="0 0 36 36" class="circular-chart">
+                        <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                        <path class="circle" id="utilization-ring" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                        <text x="18" y="17" class="ring-text" id="ring-percentage">0%</text>
+                        <text x="18" y="22" class="ring-subtext">Used</text>
+                    </svg>
+                </div>
+                <div class="utilization-stats">
+                    <h3 id="utilization-status">Excellent</h3>
+                    <p id="total-limit-text">Total Limit: ₹0</p>
+                    <p id="total-used-text">Total Used: ₹0</p>
+                    <p id="total-avail-text" style="color:var(--primary); font-weight:700;">Available: ₹0</p>
+                </div>
+            </div>
+
+            <!-- Rewards & Cashback Hub -->
+            <details class="vault-card" style="margin-bottom: 15px;">
+                <summary style="background: linear-gradient(135deg, rgba(16,185,129,0.15), rgba(59,130,246,0.15));">
+                    <span>🏆 Total Rewards Earned</span>
+                    <span id="vault-total-rewards" style="color:var(--success); font-weight:800;">₹0</span>
+                </summary>
+                <div class="vault-card-body" id="vault-rewards-breakdown">
+                    No rewards logged yet.
+                </div>
+            </details>
+
+            <div class="vault-filter-strip">
+                <select id="vault-filter" class="solid-input" style="width: auto; margin:0; padding:6px 10px;" onchange="renderVault()">
+                    <option value="active">Active Cards</option>
+                    <option value="all">All Cards</option>
+                    <option value="closed">Closed Cards</option>
+                </select>
+                <button class="btn-primary btn-sm" onclick="openAddEditModal()">+ Add Card</button>
+            </div>
+
+            <div class="vault-grid" id="vault-grid"></div>
+        </section>
+
+        <!-- LEDGER TAB (PHASE 2) -->
+        <section id="tab-ledger" class="tab-section" style="display: none;">
+            <div class="ledger-summary-bar">
+                <div class="summary-pill">
+                    <span>Spends</span>
+                    <strong id="ledger-sum-spend" style="color:var(--danger);">₹0</strong>
+                </div>
+                <div class="summary-pill">
+                    <span>Payments</span>
+                    <strong id="ledger-sum-pay" style="color:var(--primary);">₹0</strong>
+                </div>
+                <div class="summary-pill">
+                    <span>Rewards</span>
+                    <strong id="ledger-sum-reward" style="color:var(--success);">+₹0</strong>
+                </div>
+            </div>
+
+            <div class="ledger-controls glass-panel">
+                <div class="form-row" style="margin-bottom:10px;">
+                    <input type="text" id="ledger-search" class="solid-input" style="margin:0;" placeholder="🔍 Search merchant, remark..." oninput="renderLedger()">
+                    <button class="btn-primary" style="white-space:nowrap; padding:0 16px;" onclick="openTxModal()">+ Add</button>
+                </div>
+                <div class="form-row">
+                    <select id="ledger-card-filter" class="solid-input" style="margin:0; padding:8px;" onchange="renderLedger()">
+                        <option value="all">All Cards</option>
+                    </select>
+                    <select id="ledger-cat-filter" class="solid-input" style="margin:0; padding:8px;" onchange="renderLedger()">
+                        <option value="all">All Categories</option>
+                        <option value="type:spend">🛒 All Spends</option>
+                        <option value="type:payment">💵 All Payments</option>
+                        <option value="type:refund">↩️ All Refunds</option>
+                        <option value="Online Shopping">Online Shopping</option>
+                        <option value="Groceries">Groceries</option>
+                        <option value="Dining & Food">Dining & Food</option>
+                        <option value="Fuel">Fuel</option>
+                        <option value="Utilities & Bills">Utilities & Bills</option>
+                        <option value="Travel & Flights">Travel & Flights</option>
+                        <option value="Entertainment">Entertainment</option>
+                        <option value="Offline / POS">Offline / POS</option>
+                        <option value="Others">Others</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="ledger-list" class="ledger-list"></div>
+        </section>
+
+        <!-- ORACLE TAB (PHASE 3) -->
+        <section id="tab-oracle" class="tab-section" style="display: none;">
+            <div class="placeholder-content"> Stay Tuned! </div> 
+            <div class="placeholder-content">The 'Oracle' Recommendation Engine is Coming Soon in Phase 3</div>
+        </section>
+    </main>
+
+    <nav class="bottom-nav">
+        <button class="nav-item active" onclick="switchTab('home')">🏠<br><span>Home</span></button>
+        <button class="nav-item" onclick="switchTab('vault')">🏦<br><span>Vault</span></button>
+        <button class="nav-item" onclick="switchTab('ledger')">📝<br><span>Ledger</span></button>
+        <button class="nav-item" onclick="switchTab('oracle')">🧠<br><span>Oracle</span></button>
+    </nav>
+
+    <!-- Unified Add/Edit Card Modal -->
+    <div class="modal" id="cardModal">
+        <div class="modal-content solid-panel">
+            <h3 id="modal-title" style="margin-bottom:15px;">Add New Card</h3>
+            
+            <label class="input-label">Card Name</label>
+            <input type="text" id="cardName" class="solid-input" placeholder="e.g. SBI Cashback">
+            
+            <label class="input-label">First Ever Statement Date</label>
+            <div class="form-row">
+                <input type="date" id="firstDate" class="solid-input">
+                <input type="number" id="graceDays" class="solid-input" placeholder="Grace Days">
+            </div>
+            
+            <label class="input-label">Card Styling</label>
+            <div class="form-row">
+                <input type="color" id="cardColor" class="solid-input color-picker" value="#1e3a8a">
+                <select id="cardPattern" class="solid-input">
+                    <option value="none">Solid Color</option>
+                    <option value="stripes">Diagonal Stripes</option>
+                    <option value="dots">Polka Dots</option>
+                </select>
+            </div>
+
+            <label class="input-label">Credit Limit (₹)</label>
+            <input type="number" id="cardLimit" class="solid-input" placeholder="e.g. 100000">
+
+            <label class="input-label">Shared Limit Group (Optional)</label>
+            <input type="text" id="sharedGroup" class="solid-input" placeholder="e.g. 'SBI Shared' to link limits">
+            
+            <label class="checkbox-label"><input type="checkbox" id="autopay"> Autopay Enabled</label>
+            <label class="checkbox-label"><input type="checkbox" id="isClosed"> Mark as Closed</label>
+            
+            <div class="modal-actions" style="margin-top: 20px; flex-wrap: wrap;">
+                <button class="btn-cancel" onclick="toggleModal('cardModal', false)">Cancel</button>
+                <button class="btn-primary" onclick="saveCard()">Save</button>
+                <button id="btn-delete-card" class="btn-action" style="width: 100%; margin-top: 10px; background: var(--danger); color: white; border: none; padding: 12px; border-radius: 8px; font-weight: bold; display: none;" onclick="deleteCard()">Delete Permanently</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Transaction Modal (PHASE 2) -->
+    <div class="modal" id="txModal">
+        <div class="modal-content solid-panel">
+            <h3 id="tx-modal-title" style="margin-bottom:12px;">Log Transaction</h3>
+
+            <div class="tx-type-switcher">
+                <button type="button" id="type-btn-spend" class="type-btn active-spend" onclick="setTxType('spend')">🛒 Spend</button>
+                <button type="button" id="type-btn-payment" class="type-btn" onclick="setTxType('payment')">💵 Payment</button>
+                <button type="button" id="type-btn-refund" class="type-btn" onclick="setTxType('refund')">↩️ Refund</button>
+            </div>
+
+            <label class="input-label">Select Card</label>
+            <select id="txCardId" class="solid-input"></select>
+
+            <div class="form-row">
+                <div style="flex:1;">
+                    <label class="input-label">Amount (₹)</label>
+                    <input type="number" id="txAmount" class="solid-input" placeholder="0.00" step="0.01">
+                </div>
+                <div style="flex:1;">
+                    <label class="input-label">Date</label>
+                    <input type="date" id="txDate" class="solid-input">
+                </div>
+            </div>
+
+            <div id="tx-category-group">
+                <label class="input-label">Category</label>
+                <select id="txCategory" class="solid-input">
+                    <option value="Online Shopping">🛒 Online Shopping</option>
+                    <option value="Groceries">🥦 Groceries</option>
+                    <option value="Dining & Food">🍔 Dining & Food</option>
+                    <option value="Fuel">⛽ Fuel</option>
+                    <option value="Utilities & Bills">⚡ Utilities & Bills</option>
+                    <option value="Travel & Flights">✈️ Travel & Flights</option>
+                    <option value="Entertainment">🎬 Entertainment</option>
+                    <option value="Offline / POS">🏪 Offline / POS</option>
+                    <option value="Others">📦 Others</option>
+                </select>
+            </div>
+
+            <div class="form-row">
+                <div style="flex:1.3;">
+                    <label class="input-label" id="tx-merchant-label">Merchant / Platform</label>
+                    <input type="text" id="txMerchant" list="merchant-suggestions" class="solid-input" placeholder="e.g. Amazon, HPCL">
+                    <datalist id="merchant-suggestions"></datalist>
+                </div>
+                <div style="flex:1;">
+                    <label class="input-label" id="tx-reward-label">Reward (₹)</label>
+                    <input type="number" id="txReward" class="solid-input" placeholder="0" step="0.01">
+                </div>
+            </div>
+
+            <label class="input-label">Description / Remark (Optional)</label>
+            <input type="text" id="txDesc" class="solid-input" placeholder="e.g. Bought headphones / Paid via HDFC DC">
+
+            <div class="modal-actions" style="margin-top: 15px; flex-wrap: wrap;">
+                <button class="btn-cancel" onclick="toggleModal('txModal', false)">Cancel</button>
+                <button class="btn-primary" onclick="saveTransaction()">Save Entry</button>
+                <button id="btn-delete-tx" class="btn-action" style="width: 100%; margin-top: 10px; background: var(--danger); color: white; border: none; padding: 12px; border-radius: 8px; font-weight: bold; display: none;" onclick="deleteTransaction()">Delete Entry</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Confirm Modal -->
+    <div class="modal" id="confirmModal">
+        <div class="modal-content solid-panel">
+            <h3 id="confirm-title" style="margin-bottom:10px;">Confirm</h3>
+            <p id="confirm-message" style="margin-bottom: 20px; font-size: 0.95rem; color: var(--text-main);"></p>
+            <div class="modal-actions">
+                <button class="btn-cancel" onclick="toggleModal('confirmModal', false)">Cancel</button>
+                <button class="btn-primary" onclick="executeConfirm()">Yes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upgraded Bill Payment Modal -->
+    <div class="modal" id="paymentModal">
+        <div class="modal-content solid-panel">
+            <h3 id="pay-modal-title" style="margin-bottom:8px;">Mark Bill Paid</h3>
+            <p id="pay-modal-desc" style="margin-bottom: 15px; font-size: 0.85rem; color: var(--text-muted);"></p>
+            
+            <div class="form-row">
+                <div style="flex:1;">
+                    <label class="input-label">Payment Date</label>
+                    <input type="date" id="paymentDateInput" class="solid-input">
+                </div>
+                <div style="flex:1;">
+                    <label class="input-label">Amount Paid (₹)</label>
+                    <input type="number" id="paymentAmountInput" class="solid-input" placeholder="Optional" step="0.01">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div style="flex:1.3;">
+                    <label class="input-label">Paid Via (Mode)</label>
+                    <input type="text" id="paymentModeInput" class="solid-input" placeholder="e.g. HDFC BillPay, Cred">
+                </div>
+                <div style="flex:1;">
+                    <label class="input-label">Bill Cashback (₹)</label>
+                    <input type="number" id="paymentRewardInput" class="solid-input" placeholder="0" step="0.01">
+                </div>
+            </div>
+
+            <div class="modal-actions" style="margin-top: 15px;">
+                <button class="btn-cancel" onclick="toggleModal('paymentModal', false)">Cancel</button>
+                <button class="btn-primary" onclick="confirmPayment()">Confirm Paid</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/core.js"></script>
+    <script src="js/ledger.js"></script>
+    <script src="js/dashboard.js"></script>
+</body>
+</html>
